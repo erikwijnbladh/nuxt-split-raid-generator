@@ -120,6 +120,134 @@
             No characters in this split group
           </div>
         </div>
+        <!-- Accordion for split stats -->
+        <UAccordion
+          :items="[
+            {
+              label: `Miscellaneous`,
+              icon: 'i-heroicons-information-circle',
+              defaultOpen: false,
+              slot: 'split-stats-' + splitIndex,
+            },
+          ]"
+          color="primary"
+          variant="soft"
+          class="mt-4"
+        >
+          <template #[`split-stats-${splitIndex}`]>
+            <div
+              class="bg-opacity-50 rounded-lg grid grid-cols-1 md:grid-cols-3 gap-4"
+            >
+              <!-- Token distribution -->
+              <div class="rounded-md bg-gray-800 p-3">
+                <h4 class="font-medium text-sm mb-2 text-gray-300">
+                  Token Distribution
+                </h4>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <div
+                        class="w-3 h-3 rounded-full mr-2"
+                        style="background-color: #10b981"
+                      ></div>
+                      <span>Protector</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      getTokenCount(split, "Protector")
+                    }}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <div
+                        class="w-3 h-3 rounded-full mr-2"
+                        style="background-color: #8b5cf6"
+                      ></div>
+                      <span>Vanquisher</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      getTokenCount(split, "Vanquisher")
+                    }}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <div
+                        class="w-3 h-3 rounded-full mr-2"
+                        style="background-color: #eab308"
+                      ></div>
+                      <span>Conqueror</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      getTokenCount(split, "Conqueror")
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Main/Alt distribution -->
+              <div class="rounded-md bg-gray-800 p-3">
+                <h4 class="font-medium text-sm mb-2 text-gray-300">
+                  Main/Alt Distribution
+                </h4>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <UBadge color="amber" size="xs" class="mr-2">M</UBadge>
+                      <span>Mains</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      getMainsCount(split)
+                    }}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <UBadge color="gray" size="xs" class="mr-2">A</UBadge>
+                      <span>Alts</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      split.characters.length - getMainsCount(split)
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Role distribution -->
+              <div class="rounded-md bg-gray-800 p-3">
+                <h4 class="font-medium text-sm mb-2 text-gray-300">
+                  Role Distribution
+                </h4>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <UBadge color="blue" size="xs" class="mr-2">T</UBadge>
+                      <span>Tanks</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      getRoleCount(split, "Tank")
+                    }}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <UBadge color="green" size="xs" class="mr-2">H</UBadge>
+                      <span>Healers</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      getRoleCount(split, "Healer")
+                    }}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                      <UBadge color="red" size="xs" class="mr-2">D</UBadge>
+                      <span>DPS</span>
+                    </div>
+                    <span class="font-semibold">{{
+                      getRoleCount(split, "DPS")
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </UAccordion>
       </div>
     </div>
     <!-- Characters pool section -->
@@ -275,6 +403,13 @@ const characterColumns = [
   { key: "actions", label: "Actions" },
 ];
 
+// Token distribution mappings
+const TOKEN_CLASS_MAPPINGS = {
+  Protector: [10, 3, 8], // Warrior, Hunter, Shaman
+  Vanquisher: [7, 1, 4, 2], // Rogue, Death Knight, Mage, Druid
+  Conqueror: [5, 6, 9], // Paladin, Priest, Warlock
+};
+
 // Get all characters that are in any split
 const charactersInSplits = computed(() => {
   const usedCharacterIds = new Set();
@@ -368,12 +503,6 @@ async function removeCharacterFromSplit(splitIndex, charId) {
       }
       throw error;
     }
-
-    toast.add({
-      title: "Character removed",
-      description: "Character removed from split group",
-      color: "green",
-    });
   } catch (error) {
     toast.add({
       title: "Error",
@@ -565,6 +694,46 @@ function getRoleBadgeColor(role) {
   }
 }
 
+// Get token counts
+function getTokenCount(split, tokenName) {
+  if (!split || !split.characters || split.characters.length === 0) return 0;
+
+  // Get class IDs for this token
+  const tokenClassIds = TOKEN_CLASS_MAPPINGS[tokenName];
+  if (!tokenClassIds) return 0;
+
+  // Map class names to IDs for comparison
+  const classIdMap = {
+    Warrior: 10,
+    Hunter: 3,
+    Shaman: 8,
+    Rogue: 7,
+    "Death Knight": 1,
+    Mage: 4,
+    Druid: 2,
+    Paladin: 5,
+    Priest: 6,
+    Warlock: 9,
+  };
+
+  // Count characters with matching class IDs
+  return split.characters.filter((char) =>
+    tokenClassIds.includes(classIdMap[char.class])
+  ).length;
+}
+
+// Get count of main characters in a split
+function getMainsCount(split) {
+  if (!split || !split.characters) return 0;
+  return split.characters.filter((char) => char.is_main).length;
+}
+
+// Get count of characters with a specific role
+function getRoleCount(split, role) {
+  if (!split || !split.characters) return 0;
+  return split.characters.filter((char) => char.role === role).length;
+}
+
 // Load data function
 async function loadData() {
   try {
@@ -686,5 +855,14 @@ onMounted(() => {
 
 .split-item {
   transition: all 0.2s ease;
+}
+
+.accordion :deep(.u-accordion-item .u-accordion-item__button) {
+  border-radius: 0.5rem;
+  background-color: rgba(31, 41, 55, 0.5);
+}
+
+.accordion :deep(.u-accordion-item .u-accordion-item__button:hover) {
+  background-color: rgba(31, 41, 55, 0.7);
 }
 </style>
