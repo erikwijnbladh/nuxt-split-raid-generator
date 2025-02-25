@@ -53,6 +53,13 @@
                 Dashboard
               </NuxtLink>
               <NuxtLink
+                to="/roster"
+                class="flex items-center text-white hover:text-primary px-2 py-2 rounded-md"
+              >
+                <UIcon name="i-heroicons-user-group" class="mr-2" />
+                Raid Roster
+              </NuxtLink>
+              <NuxtLink
                 to="/profile"
                 class="flex items-center text-white hover:text-primary px-2 py-2 rounded-md"
               >
