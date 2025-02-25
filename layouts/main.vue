@@ -86,6 +86,9 @@
         <slot />
       </UContainer>
     </main>
+
+    <!-- Add UNotifications component -->
+    <UNotifications />
   </div>
 </template>
 

@@ -75,18 +75,22 @@ const form = reactive({
 const handleRegister = async () => {
   if (!form.email || !form.password) {
     toast.add({
-      title: "Error",
+      title: "Validation Error",
       description: "Please provide both email and password",
       color: "red",
+      icon: "i-heroicons-exclamation-circle",
+      timeout: 5000,
     });
     return;
   }
 
   if (form.password.length < 6) {
     toast.add({
-      title: "Error",
+      title: "Validation Error",
       description: "Password must be at least 6 characters long",
       color: "red",
+      icon: "i-heroicons-exclamation-circle",
+      timeout: 5000,
     });
     return;
   }
@@ -95,7 +99,21 @@ const handleRegister = async () => {
     loading.value = true;
     errorMessage.value = "";
 
-    // Try a simpler signup approach without redirectOptions
+    // First check if the email already exists by trying a password reset
+    // This is a good way to check if an email exists without exposing that information
+    const { data: checkData, error: checkError } =
+      await supabase.auth.resetPasswordForEmail(form.email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+    // If the reset doesn't error with "user not found", the email likely exists
+    if (!checkError || !checkError.message.includes("user not found")) {
+      throw new Error(
+        "This email address is already registered. Please sign in instead."
+      );
+    }
+
+    // Proceed with signup if email doesn't exist
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
@@ -109,11 +127,39 @@ const handleRegister = async () => {
   } catch (error) {
     console.error("Registration error:", error);
     errorMessage.value = error.message;
-    toast.add({
-      title: "Registration Failed",
-      description: error.message || "An unexpected error occurred",
-      color: "red",
-    });
+
+    // Check for duplicate email errors from Supabase
+    if (
+      error.message.includes("already registered") ||
+      error.message.includes("already in use") ||
+      error.message.includes("This email address is already registered")
+    ) {
+      toast.add({
+        title: "Email Already Registered",
+        description:
+          "This email address is already registered. Please sign in instead.",
+        color: "amber",
+        icon: "i-heroicons-information-circle",
+        timeout: 7000,
+        actions: [
+          {
+            label: "Sign In",
+            click: () => {
+              navigateTo("/login");
+            },
+            color: "white",
+          },
+        ],
+      });
+    } else {
+      toast.add({
+        title: "Registration Failed",
+        description: error.message || "An unexpected error occurred",
+        color: "red",
+        icon: "i-heroicons-exclamation-circle",
+        timeout: 5000,
+      });
+    }
   } finally {
     loading.value = false;
   }

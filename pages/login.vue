@@ -69,9 +69,11 @@ const handleLogin = async () => {
   } catch (error) {
     errorMessage.value = error.message;
     toast.add({
-      title: "Error",
+      title: "Login Failed",
       description: error.message,
       color: "red",
+      icon: "i-heroicons-exclamation-circle",
+      timeout: 5000,
     });
   } finally {
     loading.value = false;
