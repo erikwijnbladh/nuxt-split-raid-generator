@@ -57,7 +57,7 @@
 
         <nav class="space-y-2">
           <UButton
-            to="/dashboard"
+            to="/splits"
             block
             color="white"
             variant="ghost"

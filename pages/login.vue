@@ -65,7 +65,7 @@ const handleLogin = async () => {
     if (error) throw error;
 
     // Redirect to dashboard on success
-    router.push("/dashboard");
+    router.push("/splits");
   } catch (error) {
     errorMessage.value = error.message;
     toast.add({

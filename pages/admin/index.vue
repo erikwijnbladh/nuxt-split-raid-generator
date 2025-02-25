@@ -6,6 +6,22 @@
       <UCard>
         <template #header>
           <div class="flex items-center">
+            <UIcon name="i-heroicons-database" class="text-xl mr-2" />
+            <h2 class="text-lg font-semibold">WoW Data Management</h2>
+          </div>
+        </template>
+
+        <p class="text-gray-400 mb-4">Manage game data.</p>
+
+        <template #footer>
+          <UButton to="/admin/wow-data" color="primary" block>
+            Manage WoW Data
+          </UButton>
+        </template>
+      </UCard>
+      <UCard>
+        <template #header>
+          <div class="flex items-center">
             <UIcon name="i-heroicons-users" class="text-xl mr-2" />
             <h2 class="text-lg font-semibold">User Management</h2>
           </div>
@@ -30,23 +46,6 @@
         <template #footer>
           <UButton to="/admin/users" color="primary" block>
             Manage Users
-          </UButton>
-        </template>
-      </UCard>
-
-      <UCard>
-        <template #header>
-          <div class="flex items-center">
-            <UIcon name="i-heroicons-database" class="text-xl mr-2" />
-            <h2 class="text-lg font-semibold">WoW Data Management</h2>
-          </div>
-        </template>
-
-        <p class="text-gray-400 mb-4">Manage game data.</p>
-
-        <template #footer>
-          <UButton to="/admin/wow-data" color="primary" block>
-            Manage WoW Data
           </UButton>
         </template>
       </UCard>

@@ -7,13 +7,6 @@
         class="w-64 bg-gray-800 border-r border-primary/10 h-screen fixed left-0 top-0"
       >
         <div class="p-4">
-          <NuxtLink
-            :to="user ? '/dashboard' : '/'"
-            class="text-xl font-bold text-primary block mb-6"
-          >
-            Your App Name
-          </NuxtLink>
-
           <nav class="space-y-2">
             <!-- Main navigation links -->
             <template v-if="!user">
@@ -46,11 +39,11 @@
             <!-- Logged in user navigation -->
             <template v-else>
               <NuxtLink
-                to="/dashboard"
+                to="/splits"
                 class="flex items-center text-white hover:text-primary px-2 py-2 rounded-md"
               >
                 <UIcon name="i-heroicons-chart-bar" class="mr-2" />
-                Dashboard
+                Splits
               </NuxtLink>
               <NuxtLink
                 to="/roster"
@@ -65,6 +58,14 @@
               >
                 <UIcon name="i-heroicons-user" class="mr-2" />
                 Profile
+              </NuxtLink>
+              <NuxtLink
+                v-if="isAdmin"
+                to="/admin"
+                class="flex items-center text-white hover:text-primary px-2 py-2 rounded-md"
+              >
+                <UIcon name="i-heroicons-command-line" class="mr-2" />
+                Admin
               </NuxtLink>
               <button
                 @click="handleLogout"
@@ -104,6 +105,7 @@ const user = useSupabaseUser();
 const supabase = useSupabaseClient();
 const router = useRouter();
 const route = useRoute();
+const isAdmin = ref(false);
 
 // Check if current route is an auth page
 const isAuthPage = computed(() => {
@@ -111,10 +113,42 @@ const isAuthPage = computed(() => {
   return authPages.includes(route.path);
 });
 
+// Fetch user's admin status
+async function fetchUserRole() {
+  if (!user.value) return;
+
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("is_admin")
+      .eq("id", user.value.id)
+      .single();
+
+    if (error) throw error;
+    isAdmin.value = data?.is_admin || false;
+  } catch (error) {
+    console.error("Error fetching user role:", error);
+    isAdmin.value = false;
+  }
+}
+
 const handleLogout = async () => {
   await supabase.auth.signOut();
   router.push("/");
 };
+
+// Watch for user changes and fetch admin status when user is available
+watch(
+  user,
+  (newUser) => {
+    if (newUser) {
+      fetchUserRole();
+    } else {
+      isAdmin.value = false;
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>

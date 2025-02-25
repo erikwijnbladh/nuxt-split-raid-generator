@@ -26,7 +26,7 @@
       <div class="flex flex-wrap gap-2">
         <USelect
           v-model="classFilter"
-          :options="['All Classes', ...WOW_CLASSES]"
+          :options="classFilterOptions"
           placeholder="Filter by class"
           size="sm"
           class="w-36"
@@ -72,7 +72,7 @@
                 type="submit"
                 color="primary"
                 :disabled="!playerForm.name"
-                :loading="isSubmitting"
+                :loading="isSubmitting || isLoading"
               >
                 Add Player
               </UButton>
@@ -108,7 +108,7 @@
             <UFormGroup label="Class" name="class">
               <USelect
                 v-model="characterForm.class"
-                :options="WOW_CLASSES"
+                :options="classFilterOptions.slice(1)"
                 placeholder="Select class"
               />
             </UFormGroup>
@@ -116,10 +116,8 @@
             <UFormGroup label="Specialization" name="spec">
               <USelect
                 v-model="characterForm.spec"
-                :options="
-                  characterForm.class ? CLASS_SPECS[characterForm.class] : []
-                "
-                placeholder="Select specialization"
+                :options="specOptions"
+                placeholder="Select spec"
                 :disabled="!characterForm.class"
               />
             </UFormGroup>
@@ -149,7 +147,7 @@
       </UCard>
     </UModal>
 
-    <!-- Loading state -->
+    <!-- Loading state - this needs to be first in the condition sequence -->
     <UCard v-if="isLoading" class="text-center py-6">
       <UIcon
         name="i-heroicons-arrow-path"
@@ -158,7 +156,7 @@
       <p class="text-gray-400">Loading roster data...</p>
     </UCard>
 
-    <!-- Empty state -->
+    <!-- Empty state - only show this when we're done loading and there are no players -->
     <UCard v-else-if="players.length === 0" class="text-center py-6">
       <UIcon
         name="i-heroicons-user-group"
@@ -220,12 +218,17 @@
             v-for="char in getFilteredPlayerCharacters(player.id)"
             :key="char.id"
             class="p-2 rounded-lg border border-gray-700 relative"
-            :class="{ 'border-l-2 border-l-amber-500': char.isMain }"
+            :class="{ 'border-l-2 border-l-amber-500': char.is_main }"
           >
             <div class="flex flex-col">
               <div class="flex justify-between items-start">
                 <span class="font-bold text-sm truncate">{{ char.name }}</span>
-                <UBadge v-if="char.isMain" color="amber" size="xs" class="ml-1">
+                <UBadge
+                  v-if="char.is_main"
+                  color="amber"
+                  size="xs"
+                  class="ml-1"
+                >
                   M
                 </UBadge>
               </div>
@@ -268,10 +271,10 @@
 <script setup>
 import { v4 as uuidv4 } from "uuid";
 import {
-  WOW_CLASSES,
-  CLASS_SPECS,
   CLASS_COLORS,
   CLASS_SPEC_ROLES,
+  WOW_CLASSES,
+  CLASS_SPECS,
 } from "~/types/wow";
 
 definePageMeta({
@@ -288,8 +291,10 @@ const characters = ref([]);
 const toast = useToast();
 const showAddForm = ref(false);
 const isAddingCharacter = ref(false);
-const isLoading = ref(false);
+const isLoading = ref(true);
 const isSubmitting = ref(false);
+const classFilter = ref("All Classes");
+const roleFilter = ref("All Roles");
 
 // Form state
 const playerForm = reactive({
@@ -298,361 +303,60 @@ const playerForm = reactive({
 });
 
 const characterForm = reactive({
-  playerId: "",
   name: "",
   class: "",
   spec: "",
   isMain: false,
 });
 
-// Filters
-const classFilter = ref("All Classes");
-const roleFilter = ref("All Roles");
+// New state for WoW data
+const dbWowClasses = ref([]);
+const dbWowSpecs = ref([]);
 
-// Computed properties
-const canAddCharacter = computed(() => {
-  return (
-    characterForm.playerId &&
-    characterForm.name &&
-    characterForm.class &&
-    characterForm.spec
-  );
-});
-
-// Helper functions to get characters for a player
-function getPlayerCharacters(playerId) {
-  return characters.value.filter((char) => char.playerId === playerId);
-}
-
-function getFilteredPlayerCharacters(playerId) {
-  let result = getPlayerCharacters(playerId);
-
-  if (classFilter.value !== "All Classes") {
-    result = result.filter((char) => char.class === classFilter.value);
-  }
-
-  if (roleFilter.value !== "All Roles") {
-    result = result.filter((char) => char.role === roleFilter.value);
-  }
-
-  return result;
-}
-
-// Methods
-function openAddPlayerForm() {
-  isAddingCharacter.value = false;
-  showAddForm.value = true;
-}
-
-function openAddCharacterForm(playerId = null) {
-  if (players.value.length === 0) {
-    return toast.add({
-      title: "No Players",
-      description: "Please add a player first before adding characters.",
-      color: "amber",
-      icon: "i-heroicons-exclamation-triangle",
-      timeout: 3000,
-    });
-  }
-
-  isAddingCharacter.value = true;
-
-  // Reset the form first
-  characterForm.playerId = "";
-  characterForm.name = "";
-  characterForm.class = "";
-  characterForm.spec = "";
-  characterForm.isMain = false;
-
-  if (playerId) {
-    characterForm.playerId = playerId;
-  } else if (players.value.length === 1) {
-    // Auto-select the only player
-    characterForm.playerId = players.value[0].id;
-  }
-
-  showAddForm.value = true;
-}
-
-async function addPlayer() {
-  if (!playerForm.name) return;
-
+// Fetch WoW data from the database on page load
+async function fetchWowData(setLoadingState = true) {
   try {
-    isSubmitting.value = true;
+    if (setLoadingState) isLoading.value = true;
 
-    const newPlayerId = uuidv4();
+    // Get classes
+    const { data: classData, error: classError } = await supabase
+      .from("wow_classes")
+      .select("*")
+      .order("name");
 
-    const { error } = await supabase.from("players").insert({
-      id: newPlayerId,
-      user_id: user.value.id,
-      name: playerForm.name,
-      note: playerForm.note || null,
-    });
+    if (classError) throw classError;
+    dbWowClasses.value = classData;
 
-    if (error) throw error;
+    // Get specs
+    const { data: specData, error: specError } = await supabase
+      .from("wow_specs")
+      .select("*, wow_classes(name)")
+      .order("name");
 
-    // Add to local state after successful DB insertion
-    players.value.push({
-      id: newPlayerId,
-      name: playerForm.name,
-      note: playerForm.note || "",
-    });
-
-    // Reset form
-    playerForm.name = "";
-    playerForm.note = "";
-
-    // Close modal
-    showAddForm.value = false;
-
-    toast.add({
-      title: "Player Added",
-      description: `${playerForm.name} has been added to your roster.`,
-      color: "green",
-      icon: "i-heroicons-check-circle",
-      timeout: 3000,
-    });
+    if (specError) throw specError;
+    dbWowSpecs.value = specData;
   } catch (error) {
+    console.error("Error fetching WoW data:", error);
     toast.add({
       title: "Error",
-      description: `Failed to add player: ${error.message}`,
+      description: "Failed to load WoW data",
       color: "red",
-      timeout: 5000,
     });
   } finally {
-    isSubmitting.value = false;
+    if (setLoadingState) isLoading.value = false;
   }
 }
 
-async function addCharacter() {
-  if (!canAddCharacter.value) return;
+const canAddPlayer = computed(() => playerForm.name.trim() !== "");
 
-  try {
-    isSubmitting.value = true;
+const canAddCharacter = computed(
+  () =>
+    characterForm.name.trim() !== "" &&
+    characterForm.class !== "" &&
+    characterForm.spec !== ""
+);
 
-    const newCharacterId = uuidv4();
-    const role = CLASS_SPEC_ROLES[characterForm.class][characterForm.spec];
-
-    // If this is marked as main, unmark other characters from the same player in DB
-    if (characterForm.isMain) {
-      const { error: updateError } = await supabase
-        .from("characters")
-        .update({ is_main: false })
-        .eq("player_id", characterForm.playerId);
-
-      if (updateError) throw updateError;
-
-      // Also update in local state
-      characters.value.forEach((char) => {
-        if (char.playerId === characterForm.playerId) {
-          char.isMain = false;
-        }
-      });
-    }
-
-    // Insert new character
-    const { error } = await supabase.from("characters").insert({
-      id: newCharacterId,
-      player_id: characterForm.playerId,
-      name: characterForm.name,
-      class: characterForm.class,
-      spec: characterForm.spec,
-      role: role,
-      is_main: characterForm.isMain,
-    });
-
-    if (error) throw error;
-
-    // Add to local state after successful DB insertion
-    const newCharacter = {
-      id: newCharacterId,
-      playerId: characterForm.playerId,
-      name: characterForm.name,
-      class: characterForm.class,
-      spec: characterForm.spec,
-      role,
-      isMain: characterForm.isMain,
-    };
-
-    characters.value.push(newCharacter);
-
-    // Reset form
-    characterForm.playerId = "";
-    characterForm.name = "";
-    characterForm.class = "";
-    characterForm.spec = "";
-    characterForm.isMain = false;
-
-    // Close modal
-    showAddForm.value = false;
-
-    toast.add({
-      title: "Character Added",
-      description: `${newCharacter.name} (${newCharacter.class} - ${newCharacter.spec}) has been added to your roster.`,
-      color: "green",
-      icon: "i-heroicons-check-circle",
-      timeout: 3000,
-    });
-  } catch (error) {
-    toast.add({
-      title: "Error",
-      description: `Failed to add character: ${error.message}`,
-      color: "red",
-      timeout: 5000,
-    });
-  } finally {
-    isSubmitting.value = false;
-  }
-}
-
-async function deletePlayer(player) {
-  if (
-    confirm(
-      `Are you sure you want to delete ${player.name}? This will also delete all of their characters.`
-    )
-  ) {
-    try {
-      isLoading.value = true;
-
-      // First delete all characters associated with this player
-      const { error: charError } = await supabase
-        .from("characters")
-        .delete()
-        .eq("player_id", player.id);
-
-      if (charError) throw charError;
-
-      // Then delete the player
-      const { error } = await supabase
-        .from("players")
-        .delete()
-        .eq("id", player.id)
-        .eq("user_id", user.value.id); // Safety check
-
-      if (error) throw error;
-
-      // Update local state
-      players.value = players.value.filter((p) => p.id !== player.id);
-      characters.value = characters.value.filter(
-        (c) => c.playerId !== player.id
-      );
-
-      toast.add({
-        title: "Player Deleted",
-        description: `${player.name} and all their characters have been removed.`,
-        color: "red",
-        icon: "i-heroicons-trash",
-        timeout: 3000,
-      });
-    } catch (error) {
-      toast.add({
-        title: "Error",
-        description: `Failed to delete player: ${error.message}`,
-        color: "red",
-        timeout: 5000,
-      });
-    } finally {
-      isLoading.value = false;
-    }
-  }
-}
-
-async function deleteCharacter(character) {
-  if (confirm(`Are you sure you want to delete ${character.name}?`)) {
-    try {
-      isLoading.value = true;
-
-      const { error } = await supabase
-        .from("characters")
-        .delete()
-        .eq("id", character.id);
-
-      if (error) throw error;
-
-      // Update local state
-      characters.value = characters.value.filter((c) => c.id !== character.id);
-
-      toast.add({
-        title: "Character Deleted",
-        description: `${character.name} has been removed.`,
-        color: "red",
-        icon: "i-heroicons-trash",
-        timeout: 3000,
-      });
-    } catch (error) {
-      toast.add({
-        title: "Error",
-        description: `Failed to delete character: ${error.message}`,
-        color: "red",
-        timeout: 5000,
-      });
-    } finally {
-      isLoading.value = false;
-    }
-  }
-}
-
-async function clearAllData() {
-  if (
-    confirm(
-      "Are you sure you want to delete all players and characters? This cannot be undone."
-    )
-  ) {
-    try {
-      isLoading.value = true;
-
-      // Delete all characters for this user's players
-      const { error: charError } = await supabase
-        .from("characters")
-        .delete()
-        .in(
-          "player_id",
-          players.value.map((p) => p.id)
-        );
-
-      if (charError) throw charError;
-
-      // Delete all players for this user
-      const { error } = await supabase
-        .from("players")
-        .delete()
-        .eq("user_id", user.value.id);
-
-      if (error) throw error;
-
-      // Clear local state
-      players.value = [];
-      characters.value = [];
-
-      toast.add({
-        title: "Roster Cleared",
-        description: "All players and characters have been removed.",
-        color: "red",
-        icon: "i-heroicons-trash",
-        timeout: 3000,
-      });
-    } catch (error) {
-      toast.add({
-        title: "Error",
-        description: `Failed to clear roster: ${error.message}`,
-        color: "red",
-        timeout: 5000,
-      });
-    } finally {
-      isLoading.value = false;
-    }
-  }
-}
-
-function getPlayerName(playerId) {
-  const player = players.value.find((p) => p.id === playerId);
-  return player ? player.name : "Unknown";
-}
-
-function getPlayerCharacterCount(playerId) {
-  return characters.value.filter((c) => c.playerId === playerId).length;
-}
-
+// Get role badge color
 function getRoleBadgeColor(role) {
   switch (role) {
     case "Tank":
@@ -666,49 +370,350 @@ function getRoleBadgeColor(role) {
   }
 }
 
-async function loadData() {
-  if (!user.value) return;
+// Get player characters
+function getPlayerCharacters(playerId) {
+  return characters.value.filter((c) => c.player_id === playerId);
+}
+
+// Get filtered player characters
+function getFilteredPlayerCharacters(playerId) {
+  // Filter characters by player ID
+  let filtered = getPlayerCharacters(playerId);
+
+  // Apply class filter if set
+  if (classFilter.value !== "All Classes") {
+    filtered = filtered.filter((c) => c.class === classFilter.value);
+  }
+
+  // Apply role filter if set
+  if (roleFilter.value !== "All Roles") {
+    filtered = filtered.filter((c) => c.role === roleFilter.value);
+  }
+
+  return filtered;
+}
+
+// Delete player
+async function deletePlayer(player) {
+  try {
+    if (
+      !confirm(
+        `Are you sure you want to delete ${player.name} and all their characters?`
+      )
+    ) {
+      return;
+    }
+
+    isLoading.value = true;
+
+    // First delete all characters for this player
+    const playerChars = getPlayerCharacters(player.id);
+    for (const char of playerChars) {
+      await deleteCharacter(char, false); // false = don't reload data yet
+    }
+
+    // Then delete the player
+    const { error } = await supabase
+      .from("players")
+      .delete()
+      .eq("id", player.id);
+
+    if (error) throw error;
+
+    toast.add({
+      title: "Player Deleted",
+      description: `${player.name} has been deleted`,
+      color: "green",
+    });
+
+    await loadData();
+  } catch (error) {
+    toast.add({
+      title: "Error",
+      description: error.message,
+      color: "red",
+    });
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+// Delete character
+async function deleteCharacter(character, reload = true) {
+  try {
+    if (
+      reload &&
+      !confirm(`Are you sure you want to delete ${character.name}?`)
+    ) {
+      return;
+    }
+
+    if (reload) isLoading.value = true;
+
+    const { error } = await supabase
+      .from("characters")
+      .delete()
+      .eq("id", character.id);
+
+    if (error) throw error;
+
+    if (reload) {
+      toast.add({
+        title: "Character Deleted",
+        description: `${character.name} has been deleted`,
+        color: "green",
+      });
+
+      await loadData();
+    }
+  } catch (error) {
+    if (reload) {
+      toast.add({
+        title: "Error",
+        description: error.message,
+        color: "red",
+      });
+    }
+  } finally {
+    if (reload) isLoading.value = false;
+  }
+}
+
+// Add Player
+async function addPlayer() {
+  try {
+    isSubmitting.value = true;
+
+    const { error } = await supabase.from("players").insert([
+      {
+        id: uuidv4(),
+        name: playerForm.name.trim(),
+        note: playerForm.note.trim() || null,
+        user_id: user.value.id,
+      },
+    ]);
+
+    if (error) throw error;
+
+    toast.add({
+      title: "Player Added",
+      description: `${playerForm.name} has been added to your roster`,
+      color: "green",
+    });
+
+    showAddForm.value = false;
+    await loadData();
+  } catch (error) {
+    toast.add({
+      title: "Error",
+      description: `Failed to add player: ${error.message}`,
+      color: "red",
+    });
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+// Add Character
+async function addCharacter() {
+  try {
+    isSubmitting.value = true;
+
+    // Get role from spec
+    const role = getCharacterRole(characterForm.class, characterForm.spec);
+
+    const { error } = await supabase.from("characters").insert([
+      {
+        id: uuidv4(),
+        name: characterForm.name.trim(),
+        class: characterForm.class,
+        spec: characterForm.spec,
+        role: role,
+        is_main: characterForm.isMain,
+        player_id: characterForm.playerId,
+      },
+    ]);
+
+    if (error) throw error;
+
+    toast.add({
+      title: "Character Added",
+      description: `${characterForm.name} has been added`,
+      color: "green",
+    });
+
+    showAddForm.value = false;
+    await loadData();
+  } catch (error) {
+    toast.add({
+      title: "Error",
+      description: `Failed to add character: ${error.message}`,
+      color: "red",
+    });
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
+// Handle form submission
+function handleFormSubmit() {
+  if (isAddingCharacter.value) {
+    addCharacter();
+  } else {
+    addPlayer();
+  }
+}
+
+// Confirm and clear all data
+async function clearAllData() {
+  if (
+    !confirm(
+      "Are you sure you want to delete ALL players and characters? This cannot be undone."
+    )
+  ) {
+    return;
+  }
 
   try {
     isLoading.value = true;
 
-    // Load players
-    const { data: playerData, error: playerError } = await supabase
+    // Get the player IDs for the current user
+    const { data: playerData, error: playerQueryError } = await supabase
       .from("players")
-      .select("*")
+      .select("id")
+      .eq("user_id", user.value.id);
+
+    if (playerQueryError) throw playerQueryError;
+
+    const playerIds = playerData.map((player) => player.id);
+
+    // Only try to delete characters if we have players
+    if (playerIds.length > 0) {
+      // Delete all characters for these players
+      const { error: charError } = await supabase
+        .from("characters")
+        .delete()
+        .in("player_id", playerIds);
+
+      if (charError) throw charError;
+    }
+
+    // Delete all players
+    const { error: playerError } = await supabase
+      .from("players")
+      .delete()
       .eq("user_id", user.value.id);
 
     if (playerError) throw playerError;
 
-    // Map DB fields to our local data structure
-    players.value = playerData.map((p) => ({
-      id: p.id,
-      name: p.name,
-      note: p.note || "",
-    }));
+    toast.add({
+      title: "Data Cleared",
+      description: "All players and characters have been deleted",
+      color: "green",
+    });
+
+    await loadData();
+  } catch (error) {
+    toast.add({
+      title: "Error",
+      description: error.message,
+      color: "red",
+    });
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+// Functions for opening forms
+function openAddPlayerForm() {
+  isAddingCharacter.value = false;
+  playerForm.name = "";
+  playerForm.note = "";
+  showAddForm.value = true;
+}
+
+function openAddCharacterForm(playerId) {
+  isAddingCharacter.value = true;
+  characterForm.name = "";
+  characterForm.class = "";
+  characterForm.spec = "";
+  characterForm.isMain = false;
+  characterForm.playerId = playerId;
+  showAddForm.value = true;
+}
+
+// Computed class options for filters
+const classFilterOptions = computed(() => {
+  // Use the DB classes if available, otherwise fall back to the static import
+  if (dbWowClasses.value && dbWowClasses.value.length > 0) {
+    return ["All Classes", ...dbWowClasses.value.map((c) => c.name)];
+  }
+  return ["All Classes", ...WOW_CLASSES];
+});
+
+// Computed spec options that depend on selected class
+const specOptions = computed(() => {
+  if (!characterForm.class) return [];
+
+  // Use DB specs if available
+  if (dbWowSpecs.value && dbWowSpecs.value.length > 0) {
+    const classId = dbWowClasses.value.find(
+      (c) => c.name === characterForm.class
+    )?.id;
+    if (classId) {
+      return dbWowSpecs.value
+        .filter((spec) => spec.class_id === classId)
+        .map((spec) => spec.name);
+    }
+  }
+
+  // Fall back to static data
+  return CLASS_SPECS[characterForm.class] || [];
+});
+
+// Get character role from class and spec
+function getCharacterRole(charClass, charSpec) {
+  if (!charClass || !charSpec) return "DPS";
+  return CLASS_SPEC_ROLES[charClass]?.[charSpec] || "DPS";
+}
+
+// Get color for class
+function getClassColor(className) {
+  return CLASS_COLORS[className] || "#FFFFFF";
+}
+
+// Update your loadData function to also fetch player data
+async function loadData() {
+  try {
+    isLoading.value = true;
+
+    // Load everything sequentially to avoid race conditions
+    await fetchWowData(false); // Pass false to prevent fetchWowData from modifying isLoading
+
+    // Then load players data for the current user
+    const { data: playersData, error: playersError } = await supabase
+      .from("players")
+      .select("*")
+      .eq("user_id", user.value.id)
+      .order("name");
+
+    if (playersError) throw playersError;
+    players.value = playersData || [];
 
     // If we have players, load their characters
     if (players.value.length > 0) {
-      const { data: characterData, error: characterError } = await supabase
+      const playerIds = players.value.map((player) => player.id);
+
+      const { data: charactersData, error: charactersError } = await supabase
         .from("characters")
         .select("*")
-        .in(
-          "player_id",
-          players.value.map((p) => p.id)
-        );
+        .in("player_id", playerIds)
+        .order("name");
 
-      if (characterError) throw characterError;
-
-      // Map DB fields to our local data structure
-      characters.value = characterData.map((c) => ({
-        id: c.id,
-        playerId: c.player_id,
-        name: c.name,
-        class: c.class,
-        spec: c.spec,
-        role: c.role,
-        isMain: c.is_main,
-      }));
+      if (charactersError) throw charactersError;
+      characters.value = charactersData || [];
+    } else {
+      characters.value = [];
     }
   } catch (error) {
     toast.add({

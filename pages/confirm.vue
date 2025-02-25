@@ -24,7 +24,7 @@
         <p class="text-gray-300 mb-4">
           Your email has been successfully verified.
         </p>
-        <UButton to="/dashboard" color="primary">Go to Dashboard</UButton>
+        <UButton to="/splits" color="primary">Go to Splits Dashboard</UButton>
       </UCard>
     </template>
   </div>
