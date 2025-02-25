@@ -99,29 +99,13 @@ const handleRegister = async () => {
     loading.value = true;
     errorMessage.value = "";
 
-    // First check if the email already exists by trying a password reset
-    // This is a good way to check if an email exists without exposing that information
-    const { data: checkData, error: checkError } =
-      await supabase.auth.resetPasswordForEmail(form.email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-
-    // If the reset doesn't error with "user not found", the email likely exists
-    if (!checkError || !checkError.message.includes("user not found")) {
-      throw new Error(
-        "This email address is already registered. Please sign in instead."
-      );
-    }
-
-    // Proceed with signup if email doesn't exist
+    // Proceed with signup directly
     const { data, error } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
     });
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     registered.value = true; // Show verification message
   } catch (error) {
@@ -131,8 +115,7 @@ const handleRegister = async () => {
     // Check for duplicate email errors from Supabase
     if (
       error.message.includes("already registered") ||
-      error.message.includes("already in use") ||
-      error.message.includes("This email address is already registered")
+      error.message.includes("already in use")
     ) {
       toast.add({
         title: "Email Already Registered",

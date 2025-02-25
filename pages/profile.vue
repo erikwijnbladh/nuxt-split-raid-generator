@@ -2,21 +2,93 @@
   <div>
     <h1 class="text-2xl font-bold mb-6 text-white">Your Profile</h1>
 
-    <!-- User info card -->
-    <UCard class="mb-6">
-      <div v-if="user" class="p-4">
-        <h2 class="text-lg font-semibold mb-4">Account Information</h2>
-        <div class="flex items-center mb-4">
-          <UAvatar :alt="user.email || 'User'" size="lg" class="mr-4" />
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- User Info Card -->
+      <UCard class="md:col-span-2">
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-semibold">Account Information</h2>
+            <UBadge v-if="isAdmin" color="amber">Admin</UBadge>
+            <UBadge v-else color="gray">User</UBadge>
+          </div>
+        </template>
+
+        <div class="space-y-4">
           <div>
-            <p class="text-gray-300">{{ user.email }}</p>
-            <p class="text-sm text-gray-400">
-              Account ID: {{ user.id.substring(0, 8) }}...
+            <h3 class="text-sm font-medium text-gray-400">Email</h3>
+            <p class="text-lg">{{ user?.email }}</p>
+          </div>
+
+          <div>
+            <h3 class="text-sm font-medium text-gray-400">Account Created</h3>
+            <p class="text-lg">{{ formattedCreationDate }}</p>
+          </div>
+
+          <div
+            v-if="isAdmin"
+            class="bg-amber-100 bg-opacity-20 p-3 rounded-lg border border-amber-500 border-opacity-30"
+          >
+            <div class="flex items-center">
+              <UIcon
+                name="i-heroicons-shield-check"
+                class="text-amber-500 mr-2 text-lg"
+              />
+              <p class="text-amber-500 font-medium">Administrator Account</p>
+            </div>
+            <p class="text-sm text-gray-300 mt-1">
+              You have administrator privileges and can access the admin
+              dashboard.
             </p>
           </div>
         </div>
-      </div>
-    </UCard>
+
+        <template #footer v-if="isAdmin">
+          <UButton to="/admin" color="amber" icon="i-heroicons-command-line">
+            Go to Admin Dashboard
+          </UButton>
+        </template>
+      </UCard>
+
+      <!-- Quick Links Card -->
+      <UCard>
+        <template #header>
+          <h2 class="text-lg font-semibold">Quick Links</h2>
+        </template>
+
+        <nav class="space-y-2">
+          <UButton
+            to="/dashboard"
+            block
+            color="white"
+            variant="ghost"
+            class="justify-start"
+          >
+            <UIcon name="i-heroicons-chart-bar" class="mr-2" />
+            Dashboard
+          </UButton>
+          <UButton
+            to="/roster"
+            block
+            color="white"
+            variant="ghost"
+            class="justify-start"
+          >
+            <UIcon name="i-heroicons-user-group" class="mr-2" />
+            Raid Roster
+          </UButton>
+          <UButton
+            @click="handleLogout"
+            block
+            color="white"
+            variant="ghost"
+            class="justify-start"
+          >
+            <UIcon name="i-heroicons-arrow-left-on-rectangle" class="mr-2" />
+            Logout
+          </UButton>
+        </nav>
+      </UCard>
+    </div>
 
     <!-- Change password card -->
     <UCard class="mb-6">
@@ -93,7 +165,10 @@ definePageMeta({
 
 const user = useSupabaseUser();
 const supabase = useSupabaseClient();
+const router = useRouter();
 const toast = useToast();
+const isAdmin = ref(false);
+const loading = ref(true);
 
 // Password update form
 const passwordLoading = ref(false);
@@ -114,6 +189,44 @@ const canSubmitPasswordForm = computed(() => {
     passwordForm.newPassword === passwordForm.confirmPassword
   );
 });
+
+const formattedCreationDate = computed(() => {
+  if (!user.value?.created_at) return "-";
+  return new Date(user.value.created_at).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+});
+
+// Fetch admin status
+async function fetchUserRole() {
+  try {
+    loading.value = true;
+
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("is_admin")
+      .eq("id", user.value.id)
+      .single();
+
+    if (error) throw error;
+
+    isAdmin.value = data?.is_admin || false;
+  } catch (error) {
+    console.error("Error fetching user role:", error);
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Handle logout
+async function handleLogout() {
+  const { error } = await supabase.auth.signOut();
+  if (!error) {
+    router.push("/auth/login");
+  }
+}
 
 // Handle password change
 const handlePasswordChange = async () => {
@@ -208,4 +321,8 @@ const handleResetPassword = async () => {
     resetLoading.value = false;
   }
 };
+
+onMounted(() => {
+  fetchUserRole();
+});
 </script>
