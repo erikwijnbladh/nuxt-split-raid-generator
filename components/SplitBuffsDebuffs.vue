@@ -71,7 +71,7 @@
                   <UPopover
                     mode="hover"
                     :ui="{ width: 'md:max-w-md' }"
-                    :popper="{ placement: 'right', arrow: true }"
+                    :popper="{ placement: 'right' }"
                   >
                     <span
                       class="hover:underline truncate"
@@ -234,7 +234,7 @@
                   <UPopover
                     mode="hover"
                     :ui="{ width: 'md:max-w-md' }"
-                    :popper="{ placement: 'right', arrow: true }"
+                    :popper="{ placement: 'right' }"
                   >
                     <span
                       class="hover:underline truncate"
