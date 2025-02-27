@@ -14,8 +14,17 @@
       </UButton>
     </div>
 
+    <!-- Loading state -->
+    <UCard v-if="isLoading" class="text-center py-6">
+      <UIcon
+        name="i-heroicons-arrow-path"
+        class="text-4xl mb-2 text-gray-400 animate-spin"
+      />
+      <p class="text-gray-400">Loading splits data...</p>
+    </UCard>
+
     <!-- Empty state -->
-    <UCard v-if="splits.length === 0 && !isLoading" class="text-center py-6">
+    <UCard v-else-if="splits.length === 0" class="text-center py-6">
       <UIcon
         name="i-heroicons-user-group"
         class="text-4xl mb-2 text-gray-400"
@@ -26,17 +35,8 @@
       </UButton>
     </UCard>
 
-    <!-- Loading state -->
-    <UCard v-else-if="isLoading" class="text-center py-6">
-      <UIcon
-        name="i-heroicons-arrow-path"
-        class="text-4xl mb-2 text-gray-400 animate-spin"
-      />
-      <p class="text-gray-400">Loading splits data...</p>
-    </UCard>
-
     <!-- Split groups -->
-    <div v-if="!isLoading" class="space-y-6">
+    <div v-else class="space-y-6">
       <div
         v-for="(split, splitIndex) in splits"
         :key="splitIndex"
@@ -380,7 +380,7 @@ definePageMeta({
 const supabase = useSupabaseClient();
 const user = useSupabaseUser();
 const toast = useToast();
-const isLoading = ref(false);
+const isLoading = ref(true);
 const players = ref([]);
 const characters = ref([]);
 const splits = ref([]);

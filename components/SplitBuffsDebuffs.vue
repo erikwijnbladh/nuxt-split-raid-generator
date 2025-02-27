@@ -9,7 +9,7 @@
           slot: 'buffs-debuffs',
         },
       ]"
-      color="primary"
+      color="amber"
       variant="soft"
       class="mt-4"
     >
@@ -50,7 +50,7 @@
               >
                 No raid buffs data available
               </div>
-              <div v-else class="space-y-2">
+              <div v-else class="grid grid-cols-2 gap-2">
                 <div
                   v-for="buff in buffs"
                   :key="buff.id"
@@ -211,7 +211,7 @@
               >
                 No raid debuffs data available
               </div>
-              <div v-else class="space-y-2">
+              <div v-else class="grid grid-cols-2 gap-2">
                 <div
                   v-for="debuff in debuffs"
                   :key="debuff.id"
