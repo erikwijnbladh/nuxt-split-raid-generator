@@ -45,12 +45,14 @@
       <UCard>
         <template #header>
           <div class="flex items-center">
-            <UIcon name="i-heroicons-bolt" class="text-xl mr-2" />
+            <UIcon name="i-heroicons-sparkles" class="text-xl mr-2" />
             <h2 class="text-lg font-semibold">Buffs & Debuffs</h2>
           </div>
         </template>
 
-        <p class="text-gray-400 mb-4">Manage buffs, debuffs and providers.</p>
+        <p class="text-gray-400 mb-4">
+          Manage raid buffs, debuffs and their providers.
+        </p>
 
         <UButton to="/admin/wow-data/buffs" color="primary" block>
           Manage Buffs & Debuffs

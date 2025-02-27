@@ -248,6 +248,9 @@
             </div>
           </template>
         </UAccordion>
+
+        <!-- Buffs and Debuffs -->
+        <SplitBuffsDebuffs :characters="split.characters" />
       </div>
     </div>
     <!-- Characters pool section -->
