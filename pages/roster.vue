@@ -173,7 +173,27 @@
       <UCard v-for="player in players" :key="player.id" class="h-full">
         <div class="flex justify-between items-center mb-3">
           <div class="overflow-hidden">
-            <h3 class="text-lg font-semibold truncate">{{ player.name }}</h3>
+            <h3 class="text-lg font-semibold truncate">
+              <div class="flex flex-row gap-1">
+                {{ player.name }}
+                <UBadge
+                  :color="player.active === false ? 'red' : 'green'"
+                  size="sm"
+                  class="ml-1"
+                >
+                  {{ player.active === false ? "Inactive" : "Active" }}
+                </UBadge>
+                <UTooltip text="Toggle active status" class="my-auto">
+                  <UToggle
+                    v-model="player.active"
+                    color="primary"
+                    size="sm"
+                    @change="togglePlayerActive(player)"
+                    :loading="activeLoadingStates[player.id]"
+                  />
+                </UTooltip>
+              </div>
+            </h3>
             <p v-if="player.note" class="text-xs text-gray-400 truncate mt-0.5">
               {{ player.note }}
             </p>
@@ -295,6 +315,7 @@ const isLoading = ref(true);
 const isSubmitting = ref(false);
 const classFilter = ref("All Classes");
 const roleFilter = ref("All Roles");
+const activeLoadingStates = ref({}); // To track loading state for active toggles
 
 // Form state
 const playerForm = reactive({
@@ -490,6 +511,7 @@ async function addPlayer() {
         name: playerForm.name.trim(),
         note: playerForm.note.trim() || null,
         user_id: user.value.id,
+        active: true, // New players are active by default
       },
     ]);
 
@@ -739,4 +761,39 @@ watch(
     characterForm.spec = "";
   }
 );
+
+// Add function to toggle player active status
+async function togglePlayerActive(player) {
+  try {
+    // Set loading state for this specific player
+    activeLoadingStates.value[player.id] = true;
+
+    // Update the player in the database
+    const { error } = await supabase
+      .from("players")
+      .update({ active: player.active })
+      .eq("id", player.id);
+
+    if (error) throw error;
+
+    toast.add({
+      title: player.active ? "Player Activated" : "Player Deactivated",
+      description: `${player.name} is now ${
+        player.active ? "active" : "inactive"
+      }`,
+      color: "green",
+    });
+  } catch (error) {
+    // Revert the change on error
+    player.active = !player.active;
+
+    toast.add({
+      title: "Error",
+      description: `Failed to update player status: ${error.message}`,
+      color: "red",
+    });
+  } finally {
+    activeLoadingStates.value[player.id] = false;
+  }
+}
 </script>

@@ -24,6 +24,10 @@
           Auto-Balance Groups
         </UButton>
       </div>
+
+      <div class="flex gap-2 items-center">
+        <InactivePlayers :inactivePlayers="inactivePlayers" />
+      </div>
     </div>
 
     <!-- Add a modal for balancing options -->
@@ -433,6 +437,7 @@
 
 <script setup>
 import { CLASS_COLORS } from "~/types/wow";
+import InactivePlayers from "~/components/InactivePlayers.vue";
 
 definePageMeta({
   middleware: "auth",
@@ -488,6 +493,16 @@ const TOKEN_CLASS_MAPPINGS = {
   Conqueror: [5, 6, 9], // Paladin, Priest, Warlock
 };
 
+// Computed property for active players
+const activePlayers = computed(() => {
+  return players.value.filter((player) => player.active !== false);
+});
+
+// Computed property for inactive players
+const inactivePlayers = computed(() => {
+  return players.value.filter((player) => player.active === false);
+});
+
 // Get all characters that are in any split
 const charactersInSplits = computed(() => {
   const usedCharacterIds = new Set();
@@ -501,10 +516,12 @@ const charactersInSplits = computed(() => {
   return usedCharacterIds;
 });
 
-// Get all characters available to add to splits (not already in splits)
+// Get all characters available to add to splits (not already in splits and not from inactive players)
 const availableCharacters = computed(() => {
   return characters.value.filter(
-    (char) => !charactersInSplits.value.has(char.id)
+    (char) =>
+      !charactersInSplits.value.has(char.id) &&
+      !inactivePlayers.value.some((player) => player.id === char.player_id)
   );
 });
 
@@ -701,6 +718,21 @@ async function deleteSplitGroup(splitIndex) {
 async function addCharacterToSplit(character, splitIndex) {
   const split = splits.value[splitIndex];
   if (!split) return;
+
+  // Check if character belongs to an inactive player
+  const isInactivePlayer = inactivePlayers.value.some(
+    (player) => player.id === character.player_id
+  );
+  if (isInactivePlayer) {
+    toast.add({
+      title: "Cannot add character",
+      description: `${getPlayerName(
+        character.player_id
+      )} is inactive and their characters cannot be added to splits`,
+      color: "red",
+    });
+    return;
+  }
 
   // Check if this split already has 10 characters
   if (split.characters.length >= 10) {
@@ -912,7 +944,7 @@ function openBalanceModal() {
   showBalanceModal.value = true;
 }
 
-// Update the balanceRaidGroups function to prioritize buff/debuff coverage before stacking same classes or specs. Add an explicit step to check for missing buffs and ensure they're covered before adding duplicate classes/specs.
+// Update the balanceRaidGroups function to more explicitly handle characters from newly-inactive players, by adding comments and ensuring they're properly removed before rebalancing.
 async function balanceRaidGroups() {
   try {
     loadingStates.balancingSplits = true;
@@ -930,12 +962,38 @@ async function balanceRaidGroups() {
     // Make a copy of the current splits to restore if needed
     const splitsCopy = JSON.parse(JSON.stringify(splits.value));
 
+    // STEP 0: First remove any characters from inactive players in current splits
+    // This ensures that if a player was marked inactive since the last balancing,
+    // their characters will be removed from the splits before rebalancing
+    console.log("STEP 0: Removing characters from inactive players");
+    let removedInactiveChars = 0;
+    splits.value.forEach((split) => {
+      const initialCount = split.characters.length;
+      split.characters = split.characters.filter(
+        (char) =>
+          !inactivePlayers.value.some((player) => player.id === char.player_id)
+      );
+      removedInactiveChars += initialCount - split.characters.length;
+    });
+
+    if (removedInactiveChars > 0) {
+      console.log(
+        `Removed ${removedInactiveChars} characters from inactive players`
+      );
+    }
+
     // Collect all characters from all splits and available characters
     let allCharacters = [];
     splits.value.forEach((split) => {
       allCharacters = allCharacters.concat(split.characters);
     });
-    allCharacters = [...allCharacters, ...availableCharacters.value];
+
+    // Filter out characters from inactive players in the available characters pool
+    const availableCharsFiltered = availableCharacters.value.filter(
+      (char) =>
+        !inactivePlayers.value.some((player) => player.id === char.player_id)
+    );
+    allCharacters = [...allCharacters, ...availableCharsFiltered];
 
     // If no characters, we can't balance
     if (allCharacters.length === 0) {
